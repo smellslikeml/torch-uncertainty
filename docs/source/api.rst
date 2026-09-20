@@ -443,6 +443,7 @@ Scaling Methods
     MatrixScaler
     DirichletScaler
     IsotonicRegressionScaler
+    HCalibrationScaler
 
 
 Conformal Methods
