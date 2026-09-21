@@ -340,6 +340,16 @@ For isotonic regression calibration, consider citing:
 * Authors: *Bianca Zadrozny and Charles Elkan*
 * Paper: `KDD 2002 <https://dl.acm.org/doi/10.1145/775047.775151>`__
 
+h-Calibration
+^^^^^^^^^^^^^
+
+For h-calibration, consider citing:
+
+**h-calibration: Rethinking Classifier Recalibration with Probabilistic Error-Bounded Objective**
+
+* Authors: *Wenjian Huang, Guiping Cao, Jiahao Xia, Jingkun Chen, Hao Wang, and Jianguo Zhang*
+* Paper: `IEEE TPAMI 2025 <https://arxiv.org/abs/2506.17968>`__
+
 Monte-Carlo Batch Normalization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

@@ -3,9 +3,11 @@ import torch
 from torch import nn, softmax
 from torch.utils.data import DataLoader
 
+from torch_uncertainty.metrics import CalibrationError
 from torch_uncertainty.post_processing import (
     BBQScaler,
     DirichletScaler,
+    HCalibrationScaler,
     HistogramBinningScaler,
     IsotonicRegressionScaler,
     MatrixScaler,
@@ -364,3 +366,125 @@ class TestBBQScaler:
         inputs, _ = next(iter(degenerate_loader))
         calib_logits = scaler(inputs)
         assert not torch.isnan(calib_logits).any()
+
+
+class TestHCalibrationScaler:
+    """Testing the HCalibrationScaler class."""
+
+    def test_main(self) -> None:
+        scaler = HCalibrationScaler(model=nn.Identity())
+        logits = torch.tensor([[1.0, 2.0, 3.0]], dtype=torch.float32)
+
+        # Untrained check: identity at initialization
+        assert not scaler.trained
+        assert torch.all(scaler(logits) == logits)
+
+    def test_fit_binary(self, binary_dataloader) -> None:
+        scaler = HCalibrationScaler(model=nn.Identity(), num_epochs=5, window_length=10, num_bins=4)
+        scaler.fit(binary_dataloader, progress=False)
+
+        assert scaler.trained
+        assert scaler.num_classes == 1
+
+        inputs, _ = next(iter(binary_dataloader))
+        calib_logits = scaler(inputs)
+        assert calib_logits.shape == inputs.shape
+        assert not torch.isnan(calib_logits).any()
+        # Calibrated probabilities are valid
+        calib_probs = torch.sigmoid(calib_logits)
+        assert torch.all((calib_probs >= 0) & (calib_probs <= 1))
+
+    def test_fit_multiclass(self, multiclass_dataloader) -> None:
+        scaler = HCalibrationScaler(model=nn.Identity(), num_epochs=5, window_length=10, num_bins=4)
+        scaler.fit(multiclass_dataloader, progress=False)
+
+        assert scaler.trained
+        assert scaler.num_classes == 3
+
+        inputs, _ = next(iter(multiclass_dataloader))
+        calib_logits = scaler(inputs)
+
+        # Valid probabilities: non-negative and summing to one
+        calib_probs = torch.softmax(calib_logits, dim=-1)
+        assert torch.all(calib_probs >= 0)
+        torch.testing.assert_close(calib_probs.sum(dim=-1), torch.ones(len(inputs)))
+
+    def test_monotonic_map(self, multiclass_dataloader) -> None:
+        scaler = HCalibrationScaler(model=nn.Identity(), num_epochs=5, window_length=10, num_bins=4)
+        scaler.fit(multiclass_dataloader, progress=False)
+
+        # The fitted map is monotonically non-decreasing over the log-prob domain
+        grid = torch.linspace(-50.0, 0.0, 500)
+        mapped = scaler.calibrator.piecewise_linear(grid)
+        assert torch.all(mapped[1:] - mapped[:-1] >= -1e-6)
+
+        # Monotonicity preserves the ranking of the logits, hence the predictions
+        inputs, _ = next(iter(multiclass_dataloader))
+        calib_logits = scaler(inputs)
+        assert torch.all(calib_logits.argmax(dim=-1) == inputs.argmax(dim=-1))
+
+    def test_calibration_improves(self) -> None:
+        generator = torch.Generator().manual_seed(0)
+        num_samples, num_classes = 300, 3
+        base_logits = torch.randn(num_samples, num_classes, generator=generator)
+        true_probs = torch.softmax(base_logits / 3, dim=-1)
+        labels = torch.multinomial(true_probs, 1, generator=generator).squeeze(-1)
+        # Overconfident model: sharpened logits
+        logits = base_logits * 5
+
+        calibration_set = list(zip(logits, labels, strict=True))
+        dl = DataLoader(calibration_set, batch_size=64)
+
+        ece = CalibrationError(task="multiclass", num_bins=15, norm="l1", num_classes=num_classes)
+        ece.update(torch.softmax(logits, dim=-1), labels)
+        ece_before = ece.compute()
+
+        scaler = HCalibrationScaler(
+            model=nn.Identity(), num_epochs=60, window_length=20, num_bins=15
+        )
+        scaler.fit(dl, progress=False)
+        calib_probs = torch.softmax(scaler(logits), dim=-1)
+
+        ece = CalibrationError(task="multiclass", num_bins=15, norm="l1", num_classes=num_classes)
+        ece.update(calib_probs, labels)
+        ece_after = ece.compute()
+
+        assert ece_after < ece_before
+
+    def test_weighting_variants(self, multiclass_dataloader) -> None:
+        for weighting in ("cluaceweighted", "aceweighted", "eceweighted", "unweighted"):
+            scaler = HCalibrationScaler(
+                model=nn.Identity(),
+                num_epochs=2,
+                window_length=10,
+                num_bins=4,
+                weighting=weighting,
+            )
+            scaler.fit(multiclass_dataloader, progress=False)
+            assert scaler.trained
+
+            inputs, _ = next(iter(multiclass_dataloader))
+            assert not torch.isnan(scaler(inputs)).any()
+
+    def test_errors(self) -> None:
+        with pytest.raises(
+            ValueError, match=r"The number of segments must be strictly positive. Got "
+        ):
+            HCalibrationScaler(model=nn.Identity(), num_segments=0)
+
+        with pytest.raises(ValueError, match=r"The number of bins must be at least 2. Got "):
+            HCalibrationScaler(model=nn.Identity(), num_bins=1)
+
+        with pytest.raises(ValueError, match=r"epsilon must be non-negative. Got "):
+            HCalibrationScaler(model=nn.Identity(), epsilon=-1)
+
+        with pytest.raises(ValueError, match=r"The window length must be at least 2. Got "):
+            HCalibrationScaler(model=nn.Identity(), window_length=1)
+
+        with pytest.raises(ValueError, match=r"The learning rate must be strictly positive. Got "):
+            HCalibrationScaler(model=nn.Identity(), lr=0)
+
+        with pytest.raises(
+            ValueError, match=r"The number of epochs must be strictly positive. Got "
+        ):
+            HCalibrationScaler(model=nn.Identity(), num_epochs=0)
