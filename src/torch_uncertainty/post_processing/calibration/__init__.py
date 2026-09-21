@@ -1,6 +1,7 @@
 # ruff: noqa: F401
 from .bbq import BBQScaler
 from .dirichlet_scaler import DirichletScaler
+from .h_calibration import HCalibrationScaler
 from .histogram_binning import HistogramBinningScaler
 from .isotonic_regression import IsotonicRegressionScaler
 from .matrix_scaler import MatrixScaler

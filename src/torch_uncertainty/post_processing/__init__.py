@@ -3,6 +3,7 @@ from .abstract import PostProcessing
 from .calibration import (
     BBQScaler,
     DirichletScaler,
+    HCalibrationScaler,
     HistogramBinningScaler,
     IsotonicRegressionScaler,
     MatrixScaler,
