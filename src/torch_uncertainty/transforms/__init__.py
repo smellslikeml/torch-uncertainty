@@ -34,6 +34,7 @@ from .image import (
     Translate,
 )
 from .mixup import MIXUP_PARAMS, Mixup, MixupIO, MixupMP, RegMixup, WarpingMixup, build_mixup
+from .superpixelmix import SuperpixelMix
 
 augmentations = [
     AutoContrast,
