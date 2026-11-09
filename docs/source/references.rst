@@ -285,6 +285,16 @@ For Warping Mixup, consider citing:
 * Authors: *Quentin Bouniot, Pavlo Mozharovskyi, and Florence d'Alché-Buc*
 * Paper: `ArXiv 2023 <https://arxiv.org/abs/2311.01434>`__.
 
+Superpixel-Mix
+^^^^^^^^^^^^^^
+
+For Superpixel-Mix, consider citing:
+
+**Robust Semantic Segmentation with Superpixel-Mix**
+
+* Authors: *Gianni Franchi, Nacim Belkhir, Mai Lan Ha, Yufei Hu, Andrei Bursuc, Volker Blanz, and Angela Yao*
+* Paper: `BMVC 2021 <https://arxiv.org/abs/2108.00968>`__.
+
 Test-Time-Adaptation with ZERO
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
